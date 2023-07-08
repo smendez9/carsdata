@@ -1,0 +1,240 @@
+---
+title: "Autos Data for Practice"
+author: "SamM"
+date: "2023-07-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+Load libraries:
+
+```{r}
+library(tidyverse)
+
+library(modelr)
+
+#install.packages("patchwork")
+
+library(patchwork)
+
+
+#install.packages("corrplot")
+
+library(corrplot)
+
+#install.packages("Hmisc")
+
+library(Hmisc)
+```
+
+
+Loads cars data:
+
+```{r}
+cars70 <- read_csv("Automobile.csv")
+```
+
+
+
+Look a bit into the data:
+
+```{r}
+head(cars70)
+
+str(cars70)
+
+colnames(cars70)
+
+summary(cars70)
+```
+
+
+Look at cars with HP greater than 200:
+
+```{r}
+filter(cars70, horsepower >= 200)
+```
+
+
+Lets visualize some data:
+
+```{r}
+ggplot(data = cars70, mapping = aes(x = horsepower, y = mpg))+
+  geom_jitter((aes(color = mpg>30))) +
+  facet_grid(origin~cylinders) +
+  geom_smooth(se = F)
+
+
+```
+
+
+
+Which cars have more than 30 mpg?
+
+```{r}
+filter(cars70, mpg >30)
+
+ggplot(cars70) +
+  geom_histogram(aes(mpg))
+```
+
+No 8 cylinders get over 30 mpg. So, what is the max mpg?
+
+```{r}
+cars70$cylinders <- as.integer(cars70$cylinders)
+
+(cars8cyl <- filter(cars70, cylinders == 8))
+
+summary(cars8cyl$mpg)
+
+ggplot(cars8cyl)+
+  geom_histogram(mapping = aes(mpg, color = horsepower))
+
+filter(cars70, mpg == 26.6)
+```
+
+What year models are in the data?
+
+```{r}
+unique(cars70$model_year)
+
+```
+
+OK, now lets look at the MGP per year: (Convert this to animation later)
+
+```{r}
+cars70$cylinders <- as.factor(cars70$cylinders)
+
+
+ggplot(data = cars70, mapping = aes(x = model_year, y = mpg))+
+  geom_jitter(mapping = aes(color = cylinders))+
+  geom_smooth(aes(group = cylinders,color = cylinders), se = F)+
+  xlab('Year')+
+  ylab('MPG')+
+  ggtitle("MPG Over Time")+
+  theme(plot.title = element_text(color = "darkgreen"))
+```
+
+
+Messing with pipes to look at data for 4 cylinders:
+
+
+```{r}
+four_cyl <- cars70 %>%
+  filter(cylinders == 4) %>%
+  group_by(horsepower)%>%
+  summarise(avg_mpg = mean(mpg))
+
+
+ggplot(four_cyl, mapping = aes(x = horsepower, y = avg_mpg))+
+  geom_point()+
+  geom_smooth(se = F)+
+  ggtitle("MPG vs Horsepower for 4cyl Cars")
+```
+
+
+Which cars have 6 cylinders or less but are heavier than 3000 pounds?
+
+```{r}
+cars70 %>% 
+  mutate(cylinders = as.double(cylinders)) %>%
+  filter(cylinders <= 6 & weight > 3000) %>%
+  arrange(desc(weight))
+  as.data.frame()
+```
+
+Modeling practice with cars. Is there a correlation between weight and mpg?
+
+```{r}
+no_lm <- ggplot(cars70, mapping = aes(x = weight, y = mpg)) +
+  geom_point() +
+  ggtitle("Car Weight vs. MPG")
+
+car_weight <- lm(mpg ~ weight, data = cars70)
+summary(car_weight)
+
+grid  <- cars70 %>%
+  data_grid(weight)
+
+grid <- grid %>%
+  add_predictions(car_weight)
+
+ lm_cars <- ggplot(cars70, mapping = aes(x = weight, y = mpg))+
+  geom_point()+
+  geom_line(aes(y=pred), data = grid, color = "red", size = 1) +
+  ggtitle("Car Weight vs. MPG w/ LR Model")
+
+coef(car_weight)
+
+cor(cars70$mpg, cars70$weight)
+
+no_lm | lm_cars
+```
+
+Correlation plot of all the variables. The libraries needed for this are "Hmics" and "corrplot".
+
+```{r}
+num_cars70 <- cars70 %>%
+  select(mpg : model_year) %>%
+  mutate(cylinders = as.double(cylinders)) %>%
+  as.data.frame()
+
+num_cars70
+
+num_cars70.cor = cor(num_cars70, use = "complete.obs") #to remove NA's use = "complete.obs
+
+num_cars70.cor
+
+num_cars70.rcorr = rcorr(as.matrix(num_cars70)) #correlation with P values
+
+num_cars70.rcorr
+
+
+corrplot(num_cars70.cor)
+
+
+  
+```
+
+As acceleration increases, horsepower decreases? Added a liner model just for fun. Maybe weight has something to do with it. Let's color by weight.
+
+```{r}
+hpvacc <- lm(acceleration ~ horsepower, data = num_cars70)
+
+hpvacc.grid <- num_cars70 %>%
+  data_grid(horsepower) %>%
+  add_predictions(hpvacc)
+
+
+
+ggplot(num_cars70, mapping = aes(x = horsepower, y = acceleration, color = weight)) +
+  geom_point() +
+  geom_line(aes(y= pred), hpvacc.grid, color = "red")
+  
+```
+
+
